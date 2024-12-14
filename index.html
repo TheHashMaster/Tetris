@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tetris Game</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background-color: black;
+      font-family: Arial, sans-serif;
+      color: white;
+      flex-direction: column;
+    }
+    canvas {
+      border: 2px solid #fff;
+    }
+    #game-over {
+      font-size: 36px;
+      text-align: center;
+      color: white;
+      display: none;
+    }
+    #start-button {
+      font-size: 24px;
+      padding: 10px 20px;
+      cursor: pointer;
+      background-color: #ff8c00;
+      border: none;
+      color: white;
+      border-radius: 5px;
+      margin-top: 20px;
+    }
+    #start-button:hover {
+      background-color: #ff6a00;
+    }
+    #level-info {
+      font-size: 20px;
+      color: yellow;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <canvas id="tetris" width="300" height="600"></canvas>
+  <div id="game-over">GAME OVER</div>
+  <button id="start-button">Start Game</button>
+  <div id="level-info">Level: 1</div>
+
+  <script>
+    const canvas = document.getElementById("tetris");
+    const context = canvas.getContext("2d");
+    const blockSize = 30;
+    const rows = canvas.height / blockSize;
+    const cols = canvas.width / blockSize;
+
+    let board = Array.from({ length: rows }, () => Array(cols).fill(0));
+    let currentPiece;
+    let gameInterval;
+    let level = 1;
+    let score = 0;
+    let gameOver = false;
+
+    const colors = [
+      "cyan",  // I
+      "orange",  // L
+      "blue",  // J
+      "yellow",  // O
+      "green",  // S
+      "red",  // Z
+      "purple"  // T
+    ];
+
+    const shapes = [
+      [[1, 1, 1, 1]],  // I
+      [[1, 0, 0], [1, 1, 1]],  // L
+      [[0, 0, 1], [1, 1, 1]],  // J
+      [[1, 1], [1, 1]],  // O
+      [[0, 1, 1], [1, 1, 0]],  // S
+      [[1, 1, 0], [0, 1, 1]],  // Z
+      [[0, 1, 0], [1, 1, 1]]  // T
+    ];
+
+    function createPiece() {
+      const shapeIndex = Math.floor(Math.random() * shapes.length);
+      const shape = shapes[shapeIndex];
+      const color = colors[shapeIndex];
+      return { shape, color, x: Math.floor(cols / 2) - Math.floor(shape[0].length / 2), y: 0 };
+    }
+
+    function drawBoard() {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      // Draw game board (Tetris grid)
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          if (board[row][col]) {
+            context.fillStyle = board[row][col];
+            context.fillRect(col * blockSize, row * blockSize, blockSize, blockSize);
+            context.strokeStyle = "black";
+            context.strokeRect(col * blockSize, row * blockSize, blockSize, blockSize);
+          }
+        }
+      }
+    }
+
+    function drawPiece(piece) {
+      for (let row = 0; row < piece.shape.length; row++) {
+        for (let col = 0; col < piece.shape[row].length; col++) {
+          if (piece.shape[row][col]) {
+            context.fillStyle = piece.color;
+            context.fillRect((piece.x + col) * blockSize, (piece.y + row) * blockSize, blockSize, blockSize);
+            context.strokeStyle = "black";
+            context.strokeRect((piece.x + col) * blockSize, (piece.y + row) * blockSize, blockSize, blockSize);
+          }
+        }
+      }
+    }
+
+    function checkCollision(piece) {
+      for (let row = 0; row < piece.shape.length; row++) {
+        for (let col = 0; col < piece.shape[row].length; col++) {
+          if (piece.shape[row][col]) {
+            const x = piece.x + col;
+            const y = piece.y + row;
+            if (x < 0 || x >= cols || y >= rows || board[y][x]) {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
+    }
+
+    function mergePiece(piece) {
+      for (let row = 0; row < piece.shape.length; row++) {
+        for (let col = 0; col < piece.shape[row].length; col++) {
+          if (piece.shape[row][col]) {
+            board[piece.y + row][piece.x + col] = piece.color;
+          }
+        }
+      }
+    }
+
+    function removeLines() {
+      for (let row = rows - 1; row >= 0; row--) {
+        if (board[row].every(cell => cell)) {
+          board.splice(row, 1);
+          board.unshift(Array(cols).fill(0));
+          score += 100;
+          level = Math.floor(score / 500) + 1;
+          updateLevel();
+        }
+      }
+    }
+
+    function movePiece(piece, direction) {
+      if (direction === "left") {
+        piece.x--;
+        if (checkCollision(piece)) piece.x++;
+      } else if (direction === "right") {
+        piece.x++;
+        if (checkCollision(piece)) piece.x--;
+      } else if (direction === "down") {
+        piece.y++;
+        if (checkCollision(piece)) {
+          piece.y--;
+          mergePiece(piece);
+          removeLines();
+          currentPiece = createPiece();
+          if (checkCollision(currentPiece)) {
+            endGame();
+          }
+        }
+      }
+    }
+
+    function rotatePiece(piece) {
+      const tempShape = piece.shape.map((row, index) => row.map((_, colIndex) => piece.shape[piece.shape.length - 1 - colIndex][index]));
+      const newPiece = { ...piece, shape: tempShape };
+      if (!checkCollision(newPiece)) {
+        piece.shape = newPiece.shape;
+      }
+    }
+
+    function updateGame() {
+      if (gameOver) return;
+      movePiece(currentPiece, "down");
+      drawBoard();
+      drawPiece(currentPiece);
+    }
+
+    function updateLevel() {
+      document.getElementById("level-info").textContent = `Level: ${level}`;
+      clearInterval(gameInterval);
+      gameInterval = setInterval(updateGame, 1000 / (level + 1));  // Speed up the game with each level
+    }
+
+    function startGame() {
+      document.getElementById("game-over").style.display = "none";
+      document.getElementById("start-button").style.display = "none";
+      board = Array.from({ length: rows }, () => Array(cols).fill(0));
+      currentPiece = createPiece();
+      score = 0;
+      level = 1;
+      gameOver = false;
+      gameInterval = setInterval(updateGame, 1000 / level);
+      updateLevel();
+    }
+
+    function endGame() {
+      clearInterval(gameInterval);
+      gameOver = true;
+      document.getElementById("game-over").style.display = "block";
+      document.getElementById("start-button").style.display = "inline-block";
+    }
+
+    document.addEventListener("keydown", (event) => {
+      if (gameOver) return;
+      if (event.key === "ArrowLeft") movePiece(currentPiece, "left");
+      if (event.key === "ArrowRight") movePiece(currentPiece, "right");
+      if (event.key === "ArrowDown") movePiece(currentPiece, "down");
+      if (event.key === "ArrowUp") rotatePiece(currentPiece);
+    });
+
+    document.getElementById("start-button").addEventListener("click", startGame);
+
+  </script>
+</body>
+</html>
